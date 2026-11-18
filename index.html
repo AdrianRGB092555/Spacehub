@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sala de Red Local</title>
+    <!-- Cliente de Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        *, ::before, ::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #e5e7eb; }
+        html { line-height: 1.5; -webkit-text-size-adjust: 100%; font-family: ui-sans-serif, system-ui, sans-serif; }
+        body { margin: 0; line-height: inherit; background-color: #0f172a; color: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; }
+        header { background-color: #1e293b; border-bottom: 1px solid rgba(51, 65, 85, 0.8); padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        main { flex-grow: 1; max-width: 72rem; width: 100%; margin-left: auto; margin-right: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+        nav { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #94a3b8; background-color: rgba(30, 41, 59, 0.5); padding: 0.625rem 1rem; border-radius: 0.75rem; border: 1px solid rgba(51, 65, 85, 0.6); }
+        section { background-color: rgba(30, 41, 59, 0.8); border: 2px dashed #334155; border-radius: 1rem; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+        section:hover { border-color: #6366f1; }
+        .grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 1rem; }
+        @media (min-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        button, a { font-family: inherit; font-size: 100%; font-weight: inherit; line-height: inherit; color: inherit; text-decoration: none; cursor: pointer; }
+        .btn-primary { background-color: #4f46e5; color: white; padding: 0.375rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.375rem; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .btn-primary:hover { background-color: #4338ca; }
+        .btn-edit { background-color: #059669; color: white; padding: 0.375rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.375rem; }
+        .btn-edit:hover { background-color: #047857; }
+        .btn-secondary { background-color: #334155; color: #e2e8f0; padding: 0.375rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.375rem; border: 1px solid #475569; }
+        .btn-secondary:hover { background-color: #475569; }
+        .card { background-color: #1e293b; border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 0.75rem; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); }
+        footer { background-color: rgba(30, 41, 59, 0.4); border-top: 1px solid #1e293b; padding: 1rem; text-align: center; font-size: 0.75rem; color: #64748b; }
+        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(4px); z-index: 50; align-items: center; justify-content: center; padding: 1rem;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background-color: #1e293b; border: 1px solid #475569; border-radius: 1rem;
+            width: 100%; max-width: 56rem; height: 80vh; display: flex; flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); overflow: hidden;
+        }
+        .modal-header {
+            padding: 1rem 1.25rem; border-bottom: 1px solid #334155; display: flex;
+            align-items: center; justify-content: space-between; background-color: #0f172a;
+        }
+        .editor-area {
+            flex-grow: 1; width: 100%; background-color: #0f172a; color: #f8fafc;
+            padding: 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.9rem; line-height: 1.6; resize: none; outline: none;
+        }
+        .status-badge {
+            font-size: 0.7rem; padding: 0.2rem 0.6rem; border-radius: 9999px;
+            background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="background-color: #4f46e5; padding: 0.625rem; border-radius: 0.75rem; color: white;">📁</div>
+            <div>
+                <h1 style="font-size: 1.125rem; font-weight: bold; margin: 0; color: white;">Sala de Red Local</h1>
+                <p style="font-size: 0.75rem; color: #94a3b8; margin: 0;">Compartiendo y editando en tiempo real</p>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <button onclick="crearArchivoTextoPrompt()" class="btn-edit">📝 Nuevo Documento</button>
+            <button onclick="crearCarpetaPrompt()" class="btn-secondary">➕ Nueva Carpeta</button>
+        </div>
+    </header>
+
+    <main>
+        <nav id="breadcrumbs"></nav>
+
+        <section>
+            <div style="max-width: 28rem; margin-left: auto; margin-right: auto;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">☁️</div>
+                <h3 style="font-size: 0.875rem; font-weight: 600; color: #e2e8f0; margin: 0;">Arrastra archivos aquí o haz clic para subir a esta carpeta</h3>
+            </div>
+        </section>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <h2 style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; color: #94a3b8; text-transform: uppercase; margin: 0;">Contenido del Directorio</h2>
+            <div class="grid"></div>
+        </div>
+    </main>
+
+    <div id="editorModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 0;">
+                    <span style="font-size: 1.25rem;">✏️</span>
+                    <div style="min-width: 0;">
+                        <h3 id="editorFileName" style="margin: 0; font-size: 0.95rem; font-weight: 600; color: white;" class="truncate">archivo.txt</h3>
+                        <span id="editorStatus" class="status-badge">● Sincronizado en vivo</span>
+                    </div>
+                </div>
+                <button onclick="cerrarEditor()" class="btn-secondary">✖️ Cerrar</button>
+            </div>
+            <textarea id="realtimeTextarea" class="editor-area" placeholder="Cargando contenido..."></textarea>
+        </div>
+    </div>
+
+    <footer>
+        Sala Local Segura • Funcionamiento 100% Local e Independiente, Creado Por Adrian Gonzalez
+    </footer>
+
+    <script>
+        const socket = io();
+        let currentDir = '';
+        let archivoEnEdicion = null;
+
+        const EXTENSIONES_EDITABLES = ['.txt', '.md', '.json', '.csv', '.html', '.css', '.js', '.xml', '.log', '.ini', '.bat', '.py'];
+
+        function esEditable(nombreArchivo) {
+            const lower = nombreArchivo.toLowerCase();
+            return EXTENSIONES_EDITABLES.some(ext => lower.endsWith(ext));
+        }
+
+        function actualizarBreadcrumbs() {
+            const nav = document.getElementById('breadcrumbs');
+            let html = `<button onclick="cambiarCarpeta('')" style="background:none; border:none; color:inherit; cursor:pointer; font-weight:500;">🏠 Raíz</button>`;
+            
+            if (currentDir) {
+                const partes = currentDir.split('/');
+                let acumulado = '';
+                partes.forEach(parte => {
+                    acumulado = acumulado ? `${acumulado}/${parte}` : parte;
+                    html += ` <span style="color: #475569;">/</span> <button onclick="cambiarCarpeta('${acumulado}')" style="background:none; border:none; color:#a5b4fc; cursor:pointer; font-weight:500;">${parte}</button>`;
+                });
+            }
+            nav.innerHTML = html;
+        }
+
+        async function cargarArchivos() {
+            actualizarBreadcrumbs();
+            try {
+                const response = await fetch(`/api/files?dir=${encodeURIComponent(currentDir)}`);
+                const files = await response.json();
+                const contenedor = document.querySelector('.grid');
+                if (!contenedor) return;
+                
+                contenedor.innerHTML = '';
+
+                if (files.length === 0) {
+                    contenedor.innerHTML = '<p style="color: #94a3b8; font-size: 0.875rem; grid-column: span 3 / span 3; text-align: center; padding: 1.5rem;">Esta carpeta está vacía.</p>';
+                    return;
+                }
+
+                files.forEach(file => {
+                    let icono = file.isDir ? '📁' : (esEditable(file.name) ? '📝' : '📄');
+                    
+                    let botonesAccion = '';
+                    if (file.isDir) {
+                        botonesAccion = `<button onclick="cambiarCarpeta('${file.path}')" class="btn-secondary">📂 Abrir</button>`;
+                    } else {
+                        if (esEditable(file.name)) {
+                            botonesAccion += `<button onclick="abrirEditor('${file.path}', '${file.name}')" class="btn-edit">✏️ Editar</button>`;
+                        }
+                        botonesAccion += `<a href="${file.url}" download class="btn-primary">⬇️ Descargar</a>`;
+                    }
+
+                    let dropAttrs = file.isDir ? `ondragover="event.preventDefault()" ondrop="moverArchivoACarpeta(event, '${file.path}')"` : '';
+                    let dragAttrs = !file.isDir ? `draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '${file.name}')"` : '';
+
+                    const tarjeta = `
+                        <div ${dropAttrs} ${dragAttrs} class="card">
+                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                                <div style="font-size: 1.5rem; padding: 0.5rem; background: rgba(255,255,255,0.05); border-radius: 0.5rem; flex-shrink: 0;">${icono}</div>
+                                <div style="min-width: 0; flex-grow: 1;">
+                                    <h3 style="font-size: 0.875rem; font-weight: 500; color: #f1f5f9; margin: 0;" class="truncate" title="${file.name}">${file.name}</h3>
+                                    <p style="font-size: 0.75rem; color: #94a3b8; margin: 0.25rem 0 0 0;">${file.size}</p>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(51, 65, 85, 0.6); display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem;">
+                                ${botonesAccion}
+                            </div>
+                        </div>
+                    `;
+                    contenedor.innerHTML += tarjeta;
+                });
+            } catch (error) {
+                console.error('Error al cargar archivos:', error);
+            }
+        }
+
+        const modal = document.getElementById('editorModal');
+        const textarea = document.getElementById('realtimeTextarea');
+        const titleEl = document.getElementById('editorFileName');
+        const statusEl = document.getElementById('editorStatus');
+
+        function abrirEditor(relativePath, fileName) {
+            archivoEnEdicion = relativePath;
+            titleEl.textContent = fileName;
+            textarea.value = '';
+            statusEl.textContent = '⏳ Cargando...';
+            modal.classList.add('active');
+            socket.emit('abrir-archivo', relativePath);
+        }
+
+        function cerrarEditor() {
+            modal.classList.remove('active');
+            archivoEnEdicion = null;
+            cargarArchivos();
+        }
+
+        socket.on('contenido-archivo', (data) => {
+            if (data.path === archivoEnEdicion) {
+                textarea.value = data.content;
+                statusEl.textContent = '● Sincronizado en vivo';
+            }
+        });
+
+        socket.on('actualizar-archivo', (nuevoContenido) => {
+            if (archivoEnEdicion && textarea.value !== nuevoContenido) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = nuevoContenido;
+                textarea.setSelectionRange(start, end);
+                
+                statusEl.textContent = '⚡ Actualizado por otro equipo';
+                setTimeout(() => {
+                    if (archivoEnEdicion) statusEl.textContent = '● Sincronizado en vivo';
+                }, 1500);
+            }
+        });
+
+        textarea.addEventListener('input', () => {
+            if (archivoEnEdicion) {
+                statusEl.textContent = '💾 Guardando...';
+                socket.emit('editar-archivo', {
+                    path: archivoEnEdicion,
+                    content: textarea.value
+                });
+                setTimeout(() => {
+                    if (archivoEnEdicion) statusEl.textContent = '● Sincronizado en vivo';
+                }, 600);
+            }
+        });
+
+        async function crearArchivoTextoPrompt() {
+            let nombre = prompt("Nombre del nuevo documento (ej: notas.txt):");
+            if (!nombre) return;
+            if (!nombre.includes('.')) nombre += '.txt';
+
+            const blob = new Blob([''], { type: 'text/plain' });
+            const file = new File([blob], nombre, { type: 'text/plain' });
+            await enviarArchivoServidor(file, true);
+        }
+
+        function cambiarCarpeta(nuevaRuta) {
+            currentDir = nuevaRuta;
+            cargarArchivos();
+        }
+
+        async function moverArchivoACarpeta(event, rutaCarpetaDestino) {
+            event.preventDefault();
+            const nombreArchivo = event.dataTransfer.getData('text/plain');
+            if (!nombreArchivo) return;
+
+            try {
+                const response = await fetch('/api/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: nombreArchivo, targetDir: rutaCarpetaDestino })
+                });
+
+                if (response.ok) cargarArchivos();
+            } catch (error) {
+                console.error('Error de red:', error);
+            }
+        }
+
+        async function crearCarpetaPrompt() {
+            const nombre = prompt("Ingresa el nombre para la nueva carpeta:");
+            if (!nombre) return;
+
+            try {
+                const response = await fetch('/api/create-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: nombre, dir: currentDir })
+                });
+
+                if (response.ok) cargarArchivos();
+                else alert('Error: ' + await response.text());
+            } catch (error) {
+                console.error('Error de red:', error);
+            }
+        }
+
+        async function enviarArchivoServidor(file, silencioso = false) {
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('archivo', file);
+
+            try {
+                const respuesta = await fetch(`/api/upload?dir=${encodeURIComponent(currentDir)}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (respuesta.ok) {
+                    if (!silencioso) alert('¡Archivo guardado con éxito!');
+                    cargarArchivos();
+                } else {
+                    alert('El servidor rechazó el archivo.');
+                }
+            } catch (error) {
+                console.error('Error de red:', error);
+            }
+        }
+
+        const zonaSubida = document.querySelector('section');
+        if (zonaSubida) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                zonaSubida.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
+            });
+
+            zonaSubida.addEventListener('drop', e => {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) enviarArchivoServidor(files[0]);
+            }, false);
+
+            zonaSubida.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.onchange = e => { if (e.target.files.length > 0) enviarArchivoServidor(e.target.files[0]); };
+                input.click();
+            });
+        }
+
+        cargarArchivos();
+    </script>
+</body>
+</html>
